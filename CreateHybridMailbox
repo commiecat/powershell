@@ -1,0 +1,108 @@
+<#	
+	.NOTES
+	===========================================================================
+	 Created on:   	2018-12-15
+	 Created by:   	commiecat
+	 Organization: 	For reddit
+	 Filename:      CreateHybridMailbox.ps1 	
+	===========================================================================
+	.DESCRIPTION
+	Setting up mailbox for user.
+#>
+
+# Check for modules
+$modules = @("MSOnline", "ActiveDirectory")
+foreach ($module in $modules) {
+    if (!(Get-Module -ListAvailable -Name $module)) {
+        Write-Host "$module not found. Please install and re-run the script." -f red
+        exit
+    }
+}
+
+# Common variables
+# Takes username for Exchange and formats to email address for O365
+$creds = Get-Credential -Message "Enter your network credentials as firstname.lastname"
+$DomainUser = $creds.UserName
+$DomainPass = $creds.GetNetworkCredential().SecurePassword
+$O365U = $DomainUser + "@DOMAIN.COM"
+$LiveCred = New-Object System.Management.Automation.PSCredential ($O365U, $DomainPass)
+$primarydc = "DC.DOMAIN.COM" #Primary domain controller
+$AADServer = "AADC.DOMAIN.COM" #Azure AD Connect server
+$exchangeserver = "EXCHANGE.DOMAIN.COM" #Exchange Server
+$username = "SAMACCOUNTNAME" #User's SAMAccountName
+$email = "USERNAME@DOMAIN.COM" #User's email address
+$onlinemb = "TENANT.MAIL.ONMICROSOFT.COM" #O365 mail suffix for Exchange Online provisioning
+$SKU = "TENANT:ENTERPRISEPACK" #O365 license type
+$iso3166 = "US" #O365 country
+
+# Create remote Exchange session
+$exparams = @{
+    ConfigurationName = "Microsoft.Exchange"
+    ConnectionUri     = "http://$exchangeserver/Powershell/"
+    Authentication    = "Kerberos"
+    Credential        = $creds
+}
+$RemoteEx2013Session = New-PSSession @exparams
+Import-PSSession $RemoteEx2013Session -AllowClobber
+
+# Create remote Exchange Online session
+$eoparams = @{
+    ConfigurationName = "Microsoft.Exchange"
+    ConnectionUri     = "https://outlook.office365.com/powershell-liveid/"
+    Authentication    = "Basic"
+    Credential        = $LiveCred
+}
+$O365Session = New-PSSession @eoparams
+Import-PSSession $O365Session -DisableNameChecking -AllowClobber
+
+# Set up Exchange mailbox
+Enable-Mailbox -Identity $username -DomainController $primarydc
+Write-Host "Waiting for mailbox to register." -f Cyan
+$mailboxtimeout = $null
+do {
+    Start-Sleep -s 3
+    $mailboxtimeout = Get-MailboxFolderStatistics -identity $username -FolderScope Calendar -ErrorAction SilentlyContinue
+}
+while ($null -eq $mailboxtimeout)
+# Sets calendar default permissions to 'Reviewer'
+Write-Host "`r`nMailbox registered, setting calendar permissions.`r`n" -f Green
+Set-MailboxFolderPermission -Identity ${username}:\calendar -User Default -AccessRights Reviewer -DomainController $primarydc
+
+<#
+# Set up O365 mailbox
+Enable-RemoteMailbox $username -RemoteRoutingAddress "$username@$onlinemb" -DomainController $primarydc
+#>
+
+# Remotely execute Azure AD Sync (Delta)
+# and wait for completion.
+$AADSession = New-PSSession -ComputerName $AADServer
+Invoke-Command -Session $AADSession -ScriptBlock {Import-Module -Name 'ADSync'}
+Invoke-Command -Session $AADSession -ScriptBlock {Start-ADSyncSyncCycle -PolicyType Delta}
+Invoke-Command -Session $AADSession -ScriptBlock {$null = $ADSyncSched}
+Write-Host "Waiting for Azure AD Sync to complete." -f Cyan
+do {
+    Start-Sleep -s 10
+    Invoke-Command -Session $AADSession -ScriptBlock {$ADSyncSched = Get-ADSyncScheduler}
+    Invoke-Command -Session $AADSession -ScriptBlock {$ADSyncStatus = $ADSyncSched.SyncCycleInProgress}
+}
+while ($ADSyncStatus -eq $true)
+Write-Host "`r`nAzure AD Sync complete.`r`n" -f Green
+Connect-MsolService -Credential $LiveCred
+$O365timeout = $null
+Write-Host "Waiting for $email to be available in O365." -f Cyan
+Write-Host "This can take a minute or two." -f Cyan
+do {
+    Start-Sleep -s 15
+    $O365timeout = Get-MsolUser -UserPrincipalName $email -ErrorAction SilentlyContinue
+}
+while ($null -eq $O365timeout)
+Start-Sleep -s 30
+Write-Host "`r`n$email available, assigning O365 license.`r`n" -f Green
+
+# Assign O365 license based on location and SKU
+Set-MsolUser -UserPrincipalName $email -UsageLocation $iso3166
+Set-MsolUserLicense -UserPrincipalName $email -AddLicenses $SKU
+
+Remove-PSSession $EOSession
+Remove-PSSession $RemoteEx2013Session
+Remove-PSSession $AADSession
