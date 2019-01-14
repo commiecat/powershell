@@ -1,0 +1,86 @@
+<#
+	.NOTES
+	===========================================================================
+   Created on:   	2018-03-08
+	 Created by:   	commiecat
+	 Filename:      ADAccountCheck.ps1
+	===========================================================================
+	.DESCRIPTION
+    Checks AD account and password expiration status.
+    Unlocks account if requested.
+#>
+
+# Import AD module
+if (!(Get-Module -ListAvailable -Name ActiveDirectory)) {
+    Write-Host "Active Directory module not found`r`n" -f red
+    Write-Host "Please install the module and re-run the script." -f red
+    exit
+}
+Import-Module ActiveDirectory
+
+# Common variables
+$dc = "server.domain.com"
+$username = Read-Host -Prompt 'Enter username of account to check'
+$validuser = Get-ADUser -Server $dc -LDAPFilter "(SamAccountName=$username)" -Properties *, "msDS-UserPasswordExpiryTimeComputed"
+
+# Validate username and gather AD info
+if ($null -ne $validuser) {
+    if ($null -eq $validuser.PasswordLastSet) {
+        $pwchange = $true
+        $pwdlastset = "Change at next login."
+    }
+    else {
+        $pwchange = $false
+        $pwdlastset = Get-Date -Date $validuser.PasswordLastSet
+    }
+    $badpwcount = $validuser.BadLogonCount
+    $lastbadpwtime = $validuser.LastBadPasswordAttempt
+    $lockout = $validuser.LockedOut
+    $isexpired = $validuser.PasswordExpired
+    $acctexpire = $validuser.AccountExpirationDate
+    $neverexpires = $validuser.PasswordNeverExpires
+    if ($neverexpires -eq $false) {
+        $expiretime = $validuser."msDS-UserPasswordExpiryTimeComputed"
+        $formatexpire = Get-Date -Date ([DateTime]::FromFileTime([Int64]::Parse($expiretime))) -Format "MM/dd/yyyy HH:mm:ss"
+    }
+    else { 
+        $formatexpire = "Account never expires."
+    }
+    
+    # Lockout check
+    Write-Host "========== Details for $username ==========`r`n"
+    if ($lockout -eq $true) {
+        Write-Host "Account IS currently locked out." -ForegroundColor Red
+    }
+    else {Write-Host "Account IS NOT currently locked out." -ForegroundColor Green}
+
+    # Password expiration check
+    if ($neverexpires -eq $true) {Write-Host "Password is set to never expire.`r`n" -ForegroundColor Blue}
+    elseif ($pwchange -eq $true) {Write-Host "Password is set to be changed at next login.`r`n" -ForegroundColor Red}
+    elseif ($isexpired -eq $true) {Write-Host "Password IS currently expired.`r`n" -ForegroundColor Red}
+    else {Write-Host "Password HAS NOT expired.`r`n" -ForegroundColor Green}
+
+    # Account expiration check
+    if ($null -ne $acctexpire) {Write-Host "User account expiration:            $acctexpire" -ForegroundColor Blue}
+
+    # Output info
+    Write-Host "Password last set:                  $pwdlastset"
+    Write-Host "Password expiration:                $formatexpire`r`n"
+    Write-Host "Number of bad password attempts:    $badpwcount"
+    Write-Host "Time of last bad password attempt:  $lastbadpwtime`r`n"
+
+    # Ask to unlock a locked account
+    if ($lockout -eq $true) {
+        Write-Host "Would you like to unlock the account? Default is NO."
+        $Readhost = Read-Host "( Y / N ) "
+        Switch ($ReadHost) {
+            Y {
+                Unlock-ADAccount -Identity $username -Server $dc 
+                Write-Host "$username's account has been unlocked"
+            }
+            N {Write-Host "`r`n$username's account has not been unlocked"}
+            Default {Write-Host "`r`n$username's account has not been unlocked"}
+        }
+    }
+}
+else {"`r`n$username was not found in AD`r`n"}
