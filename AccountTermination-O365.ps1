@@ -1,10 +1,10 @@
 <#	
 	.NOTES
 	===========================================================================
-	Created on:   	2018-05-14
-    Created by:   	Tony Racci
-	Organization: 	GitHub
-    Filename:      AccountTermination-O365.ps1	
+	 Created on:   	2018-05-14
+     Created by:   	Tony Racci
+	 Organization: 	GitHub
+     Filename:      AccountTermination-O365.ps1	
 	===========================================================================
 	.DESCRIPTION
     Rewritten version of the termination script.
@@ -23,10 +23,11 @@ $Date = Get-Date -format yyyy-MM-dd
 $DomainUser = $Creds.UserName
 $Tenant = "O365_Tenant"
 $License = $Tenant + ":ENTERPRISEPACK"
+$Domain = "domain.com"
 
 # Format username to email address for O365 login - assuming username is email prefix.
 $DomainPass = $Creds.GetNetworkCredential().SecurePassword
-$O365U = $DomainUser + "@domain.com"
+$O365U = $DomainUser + $Domain
 $LiveCred = New-Object System.Management.Automation.PSCredential ($O365U, $DomainPass)
 
 
@@ -132,7 +133,7 @@ If ($ADcheck) {
         Set-Mailbox $UserInput -Type Shared
 
         # Remove O365 license (E3)
-        Set-MsolUserLicense -UserPrincipalName $UserInput@exac.com -RemoveLicenses $License
+        Set-MsolUserLicense -UserPrincipalName $UserInput$Domain -RemoveLicenses $License
 
         Remove-PSsession $EOLSession
         Start-Sleep -s 2
@@ -175,7 +176,7 @@ If ($ADcheck) {
     }
 }
 Else {
-    Write-Host "`nScript failed! $UserInput is not in Active Directory." -ForegroundColor White -BackgroundColor Red
+    Write-Host "`nScript failed! $UserInput is not in EXAC.COM Active Directory." -ForegroundColor White -BackgroundColor Red
 }
 
 Stop-Transcript
