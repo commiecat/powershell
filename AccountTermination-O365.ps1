@@ -1,10 +1,10 @@
 <#	
 	.NOTES
 	===========================================================================
-	 Created on:   	2018-05-14
-     Created by:   	Tony Racci
-	 Organization: 	GitHub
-     Filename:      AccountTermination-O365.ps1	
+	Created on:   	2018-05-14
+    Created by:   	Tony Racci
+	Organization: 	GitHub
+    Filename:      AccountTermination-O365.ps1	
 	===========================================================================
 	.DESCRIPTION
     Rewritten version of the termination script.
