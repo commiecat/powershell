@@ -1,10 +1,10 @@
 <#
 	.NOTES
 	===========================================================================
-     Created on:   	2018-08-14
-     Created by:   	Tony Racci
-	 Organization: 	GitHub
-	 Filename:      Set-AccountExpiration.ps1
+    Created on:   	2018-08-14
+    Created by:   	Tony Racci
+	Organization: 	GitHub
+	Filename:      Set-AccountExpiration.ps1
 	===========================================================================
 	.DESCRIPTION
     Sets AD account expiration to specific date/time.
