@@ -175,7 +175,7 @@ If ($ADcheck) {
     }
 }
 Else {
-    Write-Host "`nScript failed! $UserInput is not in EXAC.COM Active Directory." -ForegroundColor White -BackgroundColor Red
+    Write-Host "`nScript failed! $UserInput is not in Active Directory." -ForegroundColor White -BackgroundColor Red
 }
 
 Stop-Transcript
