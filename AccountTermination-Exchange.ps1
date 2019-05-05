@@ -8,8 +8,8 @@
 	===========================================================================
 	.DESCRIPTION
 	Rewritten version of the termination script.
-  	Original script written by asus892 at https://github.com/asus892/TerminatedScript2.
-  	This will terminate an AD account and perform some on-prem Exchange tasks.
+	Original script written by asus892 at https://github.com/asus892/TerminatedScript2.
+	This will terminate an AD account and perform some on-prem Exchange tasks.
 #>
 
 # Variables
